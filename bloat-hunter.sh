@@ -7,7 +7,7 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-echo -e "${GREEN}=== Android Ghost Storage Hunter v1.9 ===${NC}"
+echo -e "${GREEN}=== Android Ghost Storage Hunter v1.9 (Fixed) ===${NC}"
 
 # --- HIGH VISIBILITY WARNING ---
 echo -e "${RED}##################################################${NC}"
@@ -61,8 +61,8 @@ manual_delete() {
     fi
 
     # Deletion Prompt for non-critical items (hidden folders, logs, etc.)
-echo -ne "${YELLOW}[?] Type 'yes' to DELETE or 'n' to SKIP: ${NC}"
-read choice < /dev/tty
+    echo -ne "${YELLOW}[?] Type 'yes' to DELETE or 'n' to SKIP: ${NC}"
+    read choice < /dev/tty
     
     if [[ "$choice" == "yes" ]] || [[ "$choice" == "y" ]]; then
         rm -rf "$path" 2>/dev/null && echo -e "${GREEN}[OK] Deleted.${NC}" || echo -e "${RED}[!] Error: Permission Denied.${NC}"
@@ -71,24 +71,26 @@ read choice < /dev/tty
     fi
 }
 
-# 3. Deep Scan Logic (Optimized - Single pass, no intermediate grep)
-IFS=$'\n'
-# OPTIMIZATION: Combine du, grep, sort, and awk into single pipeline
-# Filter for G (gigabytes) and parse in one pass
-LARGE_ITEMS=$(du -sh /sdcard/* /sdcard/.[!.]* 2>/dev/null | awk '$1 ~ /[0-9]+(\.[0-9]+)?G/ {print}' | sort -hr)
+# 3. Deep Scan Logic (Optimized for Deep Searching)
+# -d 5 allows it to dig up to 5 folders deep to find the actual large files
+LARGE_ITEMS=$(du -h -d 5 /sdcard/ 2>/dev/null | awk '$1 ~ /[0-9]+(\.[0-9]+)?G/ {print}' | sort -hr)
 
 if [[ -z "$LARGE_ITEMS" ]]; then
     echo -e "${RED}[!] No folders/files larger than 1GB detected.${NC}"
 else
     COUNT=0
     TOTAL=$(echo "$LARGE_ITEMS" | wc -l)
+    
+    IFS=$'\n'
     for item in $LARGE_ITEMS; do
-        # OPTIMIZATION: Single awk pass to extract both size and path
-        read SIZE PATH_NAME < <(echo "$item" | awk '{print $1, $2}')
+        # Extract size and path correctly, preserving spaces in the file path
+        read -r SIZE PATH_NAME <<< "$item"
+        
         COUNT=$((COUNT + 1))
         echo -e "${CYAN}[*] Processing [$COUNT/$TOTAL]${NC}"
         manual_delete "$PATH_NAME" "$SIZE"
     done
+    unset IFS
 fi
 
 echo -e "\n${GREEN}Scan complete. If storage is still full, REBOOT your phone.${NC}"
